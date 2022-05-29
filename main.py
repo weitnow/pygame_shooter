@@ -278,6 +278,10 @@ class World():
                         pass
         return player, health_bar
 
+    def draw(self):
+        for tile in self.obstacle_list:
+            screen.blit(tile[0], tile[1])
+
 class ItemBox(pygame.sprite.Sprite):
     def __init__(self, item_type, x, y):
         pygame.sprite.Sprite.__init__(self)
@@ -446,8 +450,10 @@ run = True
 while run:
 
     clock.tick(FPS)
-
+    #update background
     draw_bg()
+    #draw world map
+    world.draw()
     # show player health
     health_bar.draw(player.health)
 
