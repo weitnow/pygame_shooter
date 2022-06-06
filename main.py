@@ -1,11 +1,12 @@
-from builtins import enumerate
-
 import pygame
+from pygame import mixer
+
 import button
 import os
 import random
 import csv
 
+mixer.init()
 pygame.init()
 
 SCREEN_WIDTH = 800
@@ -25,6 +26,7 @@ ROWS = 16
 COLS = 150
 TILE_SIZE = SCREEN_HEIGHT // ROWS
 TILE_TYPES = 21
+MAX_LEVELS = 3
 screen_scroll = 0
 bg_scroll = 0
 level = 1
@@ -36,6 +38,17 @@ moving_right = False
 shoot = False
 grenade = False
 grenade_thrown = False
+
+#load music and sounds
+pygame.mixer.music.load('audio/music2.mp3')
+pygame.mixer.music.set_volume(0.3)
+pygame.mixer.music.play(-1, 0.0, 5000)
+jump_fx = pygame.mixer.Sound('audio/jump.wav')
+jump_fx.set_volume(0.5)
+shot_fx = pygame.mixer.Sound('audio/shot.wav')
+shot_fx.set_volume(0.5)
+grenade_fx = pygame.mixer.Sound('audio/grenade.wav')
+grenade_fx.set_volume(0.5)
 
 # load images
 # button
@@ -218,6 +231,11 @@ class Soldier(pygame.sprite.Sprite):
         if pygame.sprite.spritecollide(self, water_group, False):
             self.health = 0
 
+        # check for collision with exit
+        level_complete = False
+        if pygame.sprite.spritecollide(self, exit_group, False):
+            level_complete = True
+
         # check if fallen off the map
         if self.rect.bottom > SCREEN_HEIGHT:
             self.health = 0
@@ -239,7 +257,7 @@ class Soldier(pygame.sprite.Sprite):
                 self.rect.x -= dx
                 screen_scroll = -dx
 
-        return screen_scroll
+        return screen_scroll, level_complete
 
     def shoot(self):
         if self.shoot_cooldown == 0 and self.ammo > 0:
@@ -249,6 +267,7 @@ class Soldier(pygame.sprite.Sprite):
             bullet_group.add(bullet)
             # reduce ammo
             self.ammo -= 1
+            shot_fx.play()
 
     def ai(self):
         if self.alive and player.alive:
@@ -522,6 +541,7 @@ class Grenade(pygame.sprite.Sprite):
         self.timer -= 1
         if self.timer <= 0:
             self.kill()
+            grenade_fx.play()
             explosion = Explosion(self.rect.x, self.rect.y, 0.5)
             explosion_group.add(explosion)
             # do damage to anyone that is nearby
@@ -666,8 +686,23 @@ while run:
                 player.update_action(1)  # 1: run
             else:
                 player.update_action(0)  # 0: idle
-            screen_scroll = player.move(moving_left, moving_right)
+            screen_scroll, level_complete = player.move(moving_left, moving_right)
             bg_scroll -= screen_scroll
+            #check if player has completed the level
+            if level_complete:
+                level += 1
+                bg_scroll = 0
+                world_data = reset_level()
+                if level <= MAX_LEVELS:
+                    # load in level data and create world
+                    with open(f'level{level}_data.csv', newline='') as csvfile:
+                        reader = csv.reader(csvfile, delimiter=',')
+                        for x, row in enumerate(reader):
+                            for y, tile in enumerate(row):
+                                world_data[x][y] = int(tile)
+                    world = World()
+                    player, health_bar = world.process_data(world_data)
+
         else:
             screen_scroll = 0
             if restart_button.draw(screen):
@@ -699,6 +734,7 @@ while run:
                 grenade = True
             if event.key == pygame.K_w and player.alive:
                 player.jump = True
+                jump_fx.play()
             if event.key == pygame.K_ESCAPE:
                 run = False
         # keyboard button released
